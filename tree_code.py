@@ -93,7 +93,7 @@ class DecisionTree:
         if any(ft not in {"real", "categorical"} for ft in feature_types):
             raise ValueError("There is unknown feature type")
 
-        self._tree = {}
+        self._tree = {"level": 0}
         self._feature_types = feature_types
         self._max_depth = max_depth
         self._min_samples_split = min_samples_split
@@ -128,19 +128,12 @@ class DecisionTree:
             if feature_type == "real":
                 feature_vector = sub_X[:, feature]
             elif feature_type == "categorical":
-                counts = Counter(
-                    sub_X[:, feature]
-                )  # считает количество значений каждой категории
-                clicks = Counter(
-                    sub_X[sub_y == 1, feature]
-                )  # считает количество значений определенного класса для каждой категории
+                counts = Counter(sub_X[:, feature])
+                clicks = Counter(sub_X[sub_y == 1, feature])
                 ratio = {
-                    key: clicks.get(key, 0) / count
-                    for key, count in counts.items()  # доля определенного класса в каждой категории
+                    key: clicks.get(key, 0) / count for key, count in counts.items()
                 }
-                sorted_categories = sorted(
-                    ratio, key=ratio.get
-                )  # отсортированная доля определенного класса в каждой категории
+                sorted_categories = sorted(ratio, key=ratio.get)
                 categories_map = {
                     category: i for i, category in enumerate(sorted_categories)
                 }
@@ -156,7 +149,7 @@ class DecisionTree:
             if gini_best is None or gini > gini_best:
                 feature_best = feature
                 gini_best = gini
-                split = feature_vector < threshold  #
+                split = feature_vector < threshold
 
                 if feature_type == "real":
                     threshold_best = threshold
@@ -165,10 +158,21 @@ class DecisionTree:
                         k for k, v in categories_map.items() if v < threshold  #
                     ]
 
-        if feature_best is None:
+        if (
+            feature_best is None
+            or (self._max_depth is not None and self._max_depth <= node["level"])
+            or (
+                self._min_samples_split is not None
+                and self._min_samples_split > sub_y.size
+            )
+            or (
+                self._min_samples_leaf is not None
+                and self._min_samples_leaf > min(sum(~split), sum(split))
+            )
+        ):
             node["type"] = "terminal"
             node["class"] = Counter(sub_y).most_common(1)[0][0]
-            return  #
+            return
 
         node["type"] = "nonterminal"
         node["feature_split"] = feature_best
@@ -180,7 +184,9 @@ class DecisionTree:
         else:
             raise ValueError("Некорректный тип признака")
 
-        node["left_child"], node["right_child"] = {}, {}
+        node["left_child"], node["right_child"] = {"level": node["level"] + 1}, {
+            "level": node["level"] + 1
+        }
         self._fit_node(sub_X[split], sub_y[split], node["left_child"])
         self._fit_node(sub_X[~split], sub_y[~split], node["right_child"])
 
@@ -209,7 +215,11 @@ class DecisionTree:
         else:
 
             if "threshold" in node.keys():
-                pass  ###################################################################################################################################################
+                if x[node["feature_split"]] <= node["threshold"]:
+                    return self._predict_node(x, node["left_child"])
+                else:
+                    return self._predict_node(x, node["right_child"])
+
             else:
                 if np.any(x[node["feature_split"]] == node["categories_split"]):
                     return self._predict_node(x, node["left_child"])
