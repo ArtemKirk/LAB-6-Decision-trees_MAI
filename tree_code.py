@@ -1,5 +1,6 @@
 import numpy as np
 from collections import Counter
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 
 def find_best_split(feature_vector, target_vector):
@@ -54,20 +55,25 @@ def find_best_split(feature_vector, target_vector):
     feature_vector = feature_vector[sorted_indices]
     target_vector = target_vector[sorted_indices]
 
-    thresholds = (feature_vector[:-1] + feature_vector[1:]) / 2
+    thresholds = np.unique((feature_vector[:-1] + feature_vector[1:]) / 2)
     ginis = np.array([])
 
-    for i in range(thresholds.size):
-        left_target_vector = target_vector[: i + 1]
-        right_target_vector = target_vector[i + 1 :]
+    for threshold in thresholds:
+        if min(sum(feature_vector < threshold), sum(feature_vector > threshold)) == 0:
+            ginis = np.append(ginis, -0.5)
+            continue
+        left_target_vector = target_vector[feature_vector < threshold]
+        right_target_vector = target_vector[feature_vector > threshold]
 
-        unique, counts = np.unique(left_target_vector, return_counts=True)
+        _, counts = np.unique(left_target_vector, return_counts=True)
         shares = counts / np.sum(counts)
         HR_l = 1 - np.sum(np.square(shares))
 
-        unique, counts = np.unique(right_target_vector, return_counts=True)
+        _, counts = np.unique(right_target_vector, return_counts=True)
         shares = counts / np.sum(counts)
         HR_r = 1 - np.sum(np.square(shares))
+
+        
 
         gini = (
             -left_target_vector.size * HR_l / target_vector.size
@@ -82,7 +88,7 @@ def find_best_split(feature_vector, target_vector):
     return thresholds, ginis, threshold_best, gini_best
 
 
-class DecisionTree:
+class DecisionTree(BaseEstimator, ClassifierMixin):
     def __init__(
         self,
         feature_types,
@@ -151,6 +157,7 @@ class DecisionTree:
                 gini_best = gini
                 split = feature_vector < threshold
 
+
                 if feature_type == "real":
                     threshold_best = threshold
                 elif feature_type == "categorical":
@@ -161,14 +168,8 @@ class DecisionTree:
         if (
             feature_best is None
             or (self._max_depth is not None and self._max_depth <= node["level"])
-            or (
-                self._min_samples_split is not None
-                and self._min_samples_split > sub_y.size
-            )
-            or (
-                self._min_samples_leaf is not None
-                and self._min_samples_leaf > min(sum(~split), sum(split))
-            )
+            or (self._min_samples_split is not None and self._min_samples_split > sub_y.size)
+            or (self._min_samples_leaf is not None and self._min_samples_leaf > min(sum(~split), sum(split)))
         ):
             node["type"] = "terminal"
             node["class"] = Counter(sub_y).most_common(1)[0][0]
@@ -234,3 +235,22 @@ class DecisionTree:
         for x in X:
             predicted.append(self._predict_node(x, self._tree))
         return np.array(predicted)
+
+    def get_params(self, deep=True):
+        """
+        Возвращает параметры модели.
+        """
+        return {
+            "feature_types": self._feature_types,
+            "max_depth": self._max_depth,
+            "min_samples_split": self._min_samples_split,
+            "min_samples_leaf": self._min_samples_leaf,
+        }
+
+    def set_params(self, **params):
+        """
+        Устанавливает параметры модели.
+        """
+        for param, value in params.items():
+            setattr(self, param, value)
+        return self
