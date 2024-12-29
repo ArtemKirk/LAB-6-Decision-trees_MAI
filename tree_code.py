@@ -73,8 +73,6 @@ def find_best_split(feature_vector, target_vector):
         shares = counts / np.sum(counts)
         HR_r = 1 - np.sum(np.square(shares))
 
-        
-
         gini = (
             -left_target_vector.size * HR_l / target_vector.size
             - right_target_vector.size * HR_r / target_vector.size
@@ -157,7 +155,6 @@ class DecisionTree(BaseEstimator, ClassifierMixin):
                 gini_best = gini
                 split = feature_vector < threshold
 
-
                 if feature_type == "real":
                     threshold_best = threshold
                 elif feature_type == "categorical":
@@ -168,8 +165,14 @@ class DecisionTree(BaseEstimator, ClassifierMixin):
         if (
             feature_best is None
             or (self._max_depth is not None and self._max_depth <= node["level"])
-            or (self._min_samples_split is not None and self._min_samples_split > sub_y.size)
-            or (self._min_samples_leaf is not None and self._min_samples_leaf > min(sum(~split), sum(split)))
+            or (
+                self._min_samples_split is not None
+                and self._min_samples_split > sub_y.size
+            )
+            or (
+                self._min_samples_leaf is not None
+                and self._min_samples_leaf > min(sum(~split), sum(split))
+            )
         ):
             node["type"] = "terminal"
             node["class"] = Counter(sub_y).most_common(1)[0][0]
@@ -228,6 +231,7 @@ class DecisionTree(BaseEstimator, ClassifierMixin):
                     return self._predict_node(x, node["right_child"])
 
     def fit(self, X, y):
+        self.classes_ = np.unique(y)
         self._fit_node(X, y, self._tree)
 
     def predict(self, X):
